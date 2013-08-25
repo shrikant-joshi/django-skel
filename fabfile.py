@@ -51,6 +51,17 @@ def cont(cmd, message):
 ########## END HELPERS
 
 
+########## NEW APP CREATION
+@task
+def create_app(app_name=None):
+    """Create a new app, autonamed if name not provided. Usage: fab create_app[:APP_NAME]."""
+    if app_name:
+        cont('heroku create %s' % app_name, "Couldn't create the Heroku app, continue anyway?")
+    else:
+        cont('heroku create', "Couldn't create the Heroku app, continue anyway?")
+########## END APP CREATION
+
+
 ########## DATABASE MANAGEMENT
 @task
 def syncdb():
@@ -80,19 +91,28 @@ def collectstatic():
 ########## END FILE MANAGEMENT
 
 
+########## STATIC FILES COMPRESSOR
+@task
+def compress():
+    """Collect all static files, and copy them to S3 for production usage."""
+    local('%(run)s compress' % env)
+########## END STATIC FILE COMPRESSOR
+
+
 ########## HEROKU MANAGEMENT
 @task
-def bootstrap():
-    """Bootstrap your new application with Heroku, preparing it for a production
-    deployment. This will:
-
-        - Create a new Heroku application.
+def bootstrap(app_name=None):
+    """Bootstrap a new app with Heroku, prep for production deployment. Usage: fab bootstrap[:APP_NAME]
+    This will:
+        - Create a new Heroku application, with the `app_name` if specified .
         - Install all ``HEROKU_ADDONS``.
         - Sync the database.
         - Apply all database migrations.
         - Initialize New Relic's monitoring add-on.
     """
-    cont('heroku create', "Couldn't create the Heroku app, continue anyway?")
+
+    # cont('heroku create', "Couldn't create the Heroku app, continue anyway?")
+    create_app(app_name)
 
     for addon in HEROKU_ADDONS:
         cont('heroku addons:add %s' % addon,
@@ -107,6 +127,8 @@ def bootstrap():
 
     syncdb()
     migrate()
+    collectstatic()
+    compress()
 
     cont('%(run)s newrelic-admin validate-config - stdout' % env,
             "Couldn't initialize New Relic, continue anyway?")
